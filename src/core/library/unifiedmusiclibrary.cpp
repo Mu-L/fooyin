@@ -24,6 +24,7 @@
 #include "librarythreadhandler.h"
 
 #include <core/coresettings.h>
+#include <core/engine/input/ratingtagpolicy.h>
 #include <core/library/libraryinfo.h>
 #include <core/library/tracksort.h>
 #include <core/network/remoteioservice.h>
@@ -79,7 +80,8 @@ void logScanSummary(int id, const ScanRequest::Type type, const ScanSummaryCount
                     << "updated=" << summary.updated << "removed=" << summary.removed;
 }
 
-Track mergeTrackUpdate(const Track& currentTrack, const Track& updatedTrack, LibraryTrackUpdateType updateType)
+Track mergeTrackUpdate(const Track& currentTrack, const Track& updatedTrack, LibraryTrackUpdateType updateType,
+                       Track::Stats updatedStats)
 {
     Track mergedTrack{currentTrack};
 
@@ -90,6 +92,12 @@ Track mergeTrackUpdate(const Track& currentTrack, const Track& updatedTrack, Lib
         case LibraryTrackUpdateType::Stats:
             mergeTrackStats(mergedTrack, updatedTrack, Track::Stat::All);
             mergedTrack.setModifiedTime(updatedTrack.modifiedTime());
+            if(updatedStats.testFlag(Track::Stat::Rating)) {
+                const QString tag = ratingTagPolicy().effectiveWriteTag();
+                if(!tag.isEmpty()) {
+                    mergedTrack.setRawRatingTag(tag, updatedTrack.rawRatingTag(tag));
+                }
+            }
             break;
     }
 
@@ -242,7 +250,8 @@ public:
     QCoro::Task<> commitPublishPlaylistTracks(int id, TrackList tracks);
     void scannedTracks(int id, TrackList tracks);
     void playlistLoaded(int id, TrackList tracks);
-    [[nodiscard]] TrackList mergeTrackUpdates(const TrackList& tracksToUpdate, LibraryTrackUpdateType updateType) const;
+    [[nodiscard]] TrackList mergeTrackUpdates(const TrackList& tracksToUpdate, LibraryTrackUpdateType updateType,
+                                              Track::Stats updatedStats = Track::Stat::None) const;
 
     QCoro::Task<> commitRemoveLibrary(LibraryInfo library, std::set<int> tracksRemoved);
     void removeLibrary(const LibraryInfo& library, const std::set<int>& tracksRemoved);
@@ -515,7 +524,8 @@ QCoro::Task<> UnifiedMusicLibraryPrivate::commitUpdateTracksMetadata(TrackList t
 }
 
 TrackList UnifiedMusicLibraryPrivate::mergeTrackUpdates(const TrackList& tracksToUpdate,
-                                                        LibraryTrackUpdateType updateType) const
+                                                        LibraryTrackUpdateType updateType,
+                                                        Track::Stats updatedStats) const
 {
     TrackList mergedTracks;
     mergedTracks.reserve(tracksToUpdate.size());
@@ -524,7 +534,7 @@ TrackList UnifiedMusicLibraryPrivate::mergeTrackUpdates(const TrackList& tracksT
 
     for(const auto& track : tracksToUpdate) {
         if(const auto index = lookup.findById(track)) {
-            mergedTracks.emplace_back(mergeTrackUpdate(m_tracks.at(*index), track, updateType));
+            mergedTracks.emplace_back(mergeTrackUpdate(m_tracks.at(*index), track, updateType, updatedStats));
         }
         else {
             mergedTracks.emplace_back(track);
@@ -550,7 +560,7 @@ QCoro::Task<> UnifiedMusicLibraryPrivate::commitUpdateTracksAvailability(TrackLi
 QCoro::Task<> UnifiedMusicLibraryPrivate::commitUpdateTracksStats(TrackList tracksToUpdate, Track::Stats stats)
 {
     attachMetadataStore(tracksToUpdate);
-    TrackList mergedTracks = mergeTrackUpdates(tracksToUpdate, LibraryTrackUpdateType::Stats);
+    TrackList mergedTracks = mergeTrackUpdates(tracksToUpdate, LibraryTrackUpdateType::Stats, stats);
 
     const TrackList sortedTracks = co_await sortTracks(librarySortScript(), std::move(mergedTracks));
 

@@ -24,6 +24,7 @@
 
 #include <core/coresettings.h>
 #include <core/engine/audioloader.h>
+#include <core/engine/input/ratingtagpolicy.h>
 #include <core/library/musiclibrary.h>
 #include <core/track.h>
 #include <utils/database/dbconnectionhandler.h>
@@ -58,6 +59,23 @@ AudioReader::WriteOptions writeOptionsForStats(Track::Stats stats)
         options |= AudioReader::Playcount;
     }
     return options;
+}
+
+bool syncRawRatingTag(Track& track)
+{
+    const RatingTagPolicy policy = ratingTagPolicy();
+    const QString tag            = policy.effectiveWriteTag();
+    if(tag.isEmpty()) {
+        return false;
+    }
+
+    const QString value = formatTextRating(track.rating(), policy.writeScale);
+    if(track.rawRatingTag(tag) == value) {
+        return false;
+    }
+
+    track.setRawRatingTag(tag, value);
+    return true;
 }
 } // namespace
 
@@ -158,6 +176,9 @@ void TrackDatabaseManager::updateTracks(const TrackList& tracks, bool write, int
 
         if(write && !isDbOnlyMetadataTrack(updatedTrack)) {
             if(m_audioLoader->writeTrackMetadata(updatedTrack, options)) {
+                if(options.testFlag(AudioReader::Rating)) {
+                    syncRawRatingTag(updatedTrack);
+                }
                 const QDateTime modifiedTime = QFileInfo{updatedTrack.filepath()}.lastModified();
                 updatedTrack.setModifiedTime(modifiedTime.isValid() ? modifiedTime.toMSecsSinceEpoch() : 0);
                 updatedTrack.normaliseExtraProperties();
@@ -225,11 +246,13 @@ void TrackDatabaseManager::updateTrackStats(const TrackList& tracks, Track::Stat
 
         if(!track.isInArchive() && !isDbOnlyMetadataTrack(updatedTrack) && writeOptions != AudioReader::None) {
             if(m_audioLoader->writeTrackMetadata(updatedTrack, writeOptions)) {
+                const bool rawRatingChanged
+                    = writeOptions.testFlag(AudioReader::Rating) && syncRawRatingTag(updatedTrack);
                 const QDateTime modifiedTime   = QFileInfo{updatedTrack.filepath()}.lastModified();
                 const uint64_t newModifiedTime = modifiedTime.isValid() ? modifiedTime.toMSecsSinceEpoch() : 0;
                 updatedTrack.setModifiedTime(newModifiedTime);
                 updatedTrack.normaliseExtraProperties();
-                needsTrackUpdate = newModifiedTime != track.modifiedTime();
+                needsTrackUpdate = rawRatingChanged || newModifiedTime != track.modifiedTime();
             }
             else {
                 qCWarning(TRK_DBMAN) << "Failed to write track playback statistics to file:" << updatedTrack.filepath();

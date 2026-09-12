@@ -17,11 +17,13 @@
  *
  */
 
-#include "core/library/unifiedmusiclibrary.h"
+#include "testutils.h"
+
 #include "core/database/dbschema.h"
 #include "core/internalcoresettings.h"
 #include "core/library/librarymanager.h"
 #include "core/library/libraryscanner.h"
+#include "core/library/unifiedmusiclibrary.h"
 #include "core/network/networkaccessmanager.h"
 #include "core/network/remoteioservice.h"
 #include "core/playlist/parsers/cueparser.h"
@@ -30,6 +32,7 @@
 #include <core/coresettings.h>
 
 #include <core/engine/audioloader.h>
+#include <core/engine/input/ratingtagpolicy.h>
 #include <utils/database/dbconnectionhandler.h>
 #include <utils/database/dbconnectionpool.h>
 #include <utils/database/dbconnectionprovider.h>
@@ -453,6 +456,7 @@ protected:
     void SetUp() override
     {
         initialiseTestEnvironment();
+        resetRatingSettings();
 
         m_context = std::make_unique<LibraryTestContext>();
         ASSERT_TRUE(m_context->tempDir.isValid());
@@ -863,6 +867,105 @@ TEST_F(UnifiedMusicLibraryTest, RatingUpdateDoesNotWriteMetadataWhenDisabled)
 
     ASSERT_TRUE(waitForCondition([&]() { return context().library.trackForId(track.id()).rating() == 0.8F; }));
     EXPECT_TRUE(context().readerState->writes().empty());
+}
+
+TEST_F(UnifiedMusicLibraryTest, RatingWriteUpdatesRawRatingTag)
+{
+    ASSERT_TRUE(context().settings.set<Settings::Core::SaveRatingToMetadata>(true));
+
+    {
+        FySettings settings;
+        settings.setValue(RatingSettings::WriteTag, u"RATING"_s);
+        settings.setValue(RatingSettings::WriteScale, u"OneToFive"_s);
+    }
+
+    createTrackFile(u"raw_rating.mp3"_s, u"Track"_s);
+
+    const LibraryInfo libraryInfo = addLibrary(u"Raw Rating"_s);
+    ASSERT_GE(libraryInfo.id, 0);
+
+    waitForSuccessfulScan([&]() { return context().library.rescan(libraryInfo); });
+    ASSERT_EQ(context().library.tracks().size(), 1);
+
+    Track track = context().library.tracks().front();
+    track.setRating(0.6F);
+    track.setRawRatingTag(u"RATING"_s, u"3"_s);
+
+    QSignalSpy metadataSpy{&context().library, &MusicLibrary::tracksMetadataChanged};
+    context().library.updateTrackMetadata({track});
+    waitForSignal(metadataSpy);
+
+    track = context().library.trackForId(track.id());
+    ASSERT_EQ(track.rawRatingTag(u"RATING"_s), u"3"_s);
+
+    track.setRating(1.0F);
+    context().library.updateTrackStats(track, Track::Stat::Rating);
+
+    ASSERT_TRUE(waitForCondition([&]() {
+        const Track updatedTrack = context().library.trackForId(track.id());
+        return updatedTrack.rating() == 1.0F && updatedTrack.rawRatingTag(u"RATING"_s) == u"5"_s;
+    }));
+
+    const auto writes = context().readerState->writes();
+    ASSERT_EQ(writes.size(), 1);
+    EXPECT_EQ(writes.front().second, AudioReader::Rating);
+
+    QSignalSpy loadedSpy{&context().library, &MusicLibrary::tracksLoaded};
+    context().library.loadAllTracks();
+    waitForSignal(loadedSpy);
+
+    const Track restoredTrack = context().library.trackForId(track.id());
+    EXPECT_FLOAT_EQ(restoredTrack.rating(), 1.0F);
+    EXPECT_EQ(restoredTrack.rawRatingTag(u"RATING"_s), u"5"_s);
+}
+
+TEST_F(UnifiedMusicLibraryTest, UnmanagedRatingWriteUpdatesPlaylistRawRatingTag)
+{
+    ASSERT_TRUE(context().settings.set<Settings::Core::SaveRatingToMetadata>(true));
+
+    {
+        FySettings settings;
+        settings.setValue(RatingSettings::WriteTag, u"RATING"_s);
+        settings.setValue(RatingSettings::WriteScale, u"OneToFive"_s);
+    }
+
+    QTemporaryDir externalDir;
+    ASSERT_TRUE(externalDir.isValid());
+    const QString path = externalDir.filePath(u"raw_rating.mp3"_s);
+    writeFile(path);
+    context().readerState->setTitle(path, u"Track"_s);
+
+    QSignalSpy scannedSpy{&context().library, &MusicLibrary::tracksScanned};
+    waitForSuccessfulScan([&]() { return context().library.scanFiles({QUrl::fromLocalFile(path)}); },
+                          ScanRequest::Files);
+
+    ASSERT_FALSE(scannedSpy.isEmpty());
+    auto tracks = scannedSpy.takeLast().at(1).value<TrackList>();
+    ASSERT_EQ(tracks.size(), 1);
+
+    Track track = tracks.front();
+    ASSERT_FALSE(track.isInLibrary());
+    track.setRating(0.6F);
+    track.setRawRatingTag(u"RATING"_s, u"3"_s);
+
+    QSignalSpy metadataSpy{&context().library, &MusicLibrary::tracksMetadataChanged};
+    context().library.updateTrackMetadata({track});
+    waitForSignal(metadataSpy);
+
+    track          = context().library.trackForId(track.id());
+    auto* playlist = context().playlistHandler.createPlaylist(u"Unmanaged"_s, {track});
+    ASSERT_NE(playlist, nullptr);
+
+    track.setRating(1.0F);
+    context().library.updateTrackStats(track, Track::Stat::Rating);
+
+    ASSERT_TRUE(waitForCondition([&]() {
+        if(playlist->tracks().empty()) {
+            return false;
+        }
+        const Track& updatedTrack = playlist->tracks().front();
+        return updatedTrack.rating() == 1.0F && updatedTrack.rawRatingTag(u"RATING"_s) == u"5"_s;
+    }));
 }
 
 TEST_F(UnifiedMusicLibraryTest, OverlappingSortAndScanDoNotLoseNewTracks)
