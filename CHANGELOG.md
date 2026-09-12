@@ -9,34 +9,48 @@
 * Global Shortcuts: Add system-wide keyboard shortcuts ([#518](https://github.com/fooyin/fooyin/issues/518), [#1074](https://github.com/fooyin/fooyin/issues/1074))
 * Love: Add loved status with playlist and tag editing, scripting, and scrobbling support ([#1035](https://github.com/fooyin/fooyin/issues/1035))
 * Metadata Lookup: Add MusicBrainz metadata lookup ([#1554](https://github.com/fooyin/fooyin/pull/1554))
+* Run Services: Add configurable commands for opening tracks in external applications
+* Saved Filters: Add reusable library filters ([#1605](https://github.com/fooyin/fooyin/pull/1605))
 
 ### Improvements
 
 * Audio Conversion
   - Add detailed conversion results
   - Add a per-preset option to show output files in a detached playlist
-* Artwork: Cache pending embedded artwork to avoid repeated decoding and repainting ([#1585](https://github.com/fooyin/fooyin/issues/1585))
+* Artwork
+  - Add full-size artwork actions to track context menus and Properties ([#1603](https://github.com/fooyin/fooyin/issues/1603))
+  - Cache pending embedded artwork to avoid repeated decoding and repainting ([#1585](https://github.com/fooyin/fooyin/issues/1585))
+  - Add option to fall back to the front cover when artist artwork is unavailable
 * Command Button: Add searchable command and icon pickers
 * Discord: Add local and MusicBrainz artwork to Rich Presence ([#812](https://github.com/fooyin/fooyin/issues/812))
 * FileOps: Add a "Don't ask again" option to destructive action confirmations
 * Filters: Use tabs in the configuration dialog
 * Interface
+  - Add configurable Love and rating editor colours
+  - Add configurable Script Editor appearance and behaviour
   - Add per-layout visibility for the Layout menu
+  - Improve large drag selections and item view row updates
   - Refine wording and typography ([#1561](https://github.com/fooyin/fooyin/pull/1561), [#1580](https://github.com/fooyin/fooyin/pull/1580))
   - Update application icons and logos
 * Library Tree: Make context menu playback of a single track match double-click playback
-* Library/Metadata: Support per-track metadata and reliable reloads for embedded CUE sheets ([#1549](https://github.com/fooyin/fooyin/issues/1549), [#1567](https://github.com/fooyin/fooyin/issues/1567))
+* Library/Metadata
+  - Improve track ID lookup performance
+  - Support per-track metadata and reliable reloads for embedded CUE sheets ([#1549](https://github.com/fooyin/fooyin/issues/1549), [#1567](https://github.com/fooyin/fooyin/issues/1567))
 * Notifications: Make notifications on track repeat optional ([#1545](https://github.com/fooyin/fooyin/issues/1545))
 * Playlist
   - Add custom grouping scripts to presets ([#1566](https://github.com/fooyin/fooyin/issues/1566))
+  - Avoid track ID lookups during drag and drop
   - Reduce population and artwork loading overhead
   - Replace the default playlist contents when opening external files by default
 * Scrobbling: Add optional Last.fm playcount and loved status synchronisation at playback start
 * Search: Add keyboard navigation to results
 * Scripting
   - Add common metadata aliases
+  - Add `$applink` for launching external applications
+  - Add `$greater`, `$shortest`, `$strchr`, and `$strrchr`
   - Add `$select`
   - Add `$cut` as alias for `$left`
+  - Improve conditional evaluation for concatenated expressions
   - Improve date parsing and track sorting performance
 
 ### Fixes
@@ -54,6 +68,7 @@
 * Interface
   - Apply all changes when confirming Properties dialogs without Apply ([#939](https://github.com/fooyin/fooyin/issues/939))
   - Fix bounds checking in expanded tree views
+  - Fix dummy widget label margins
   - Fix icon scaling in the system tray and interface
   - Keep artwork-aligned card widths consistent ([#1573](https://github.com/fooyin/fooyin/issues/1573))
   - Keep fixed-gap icon rows consistently aligned ([#1573](https://github.com/fooyin/fooyin/issues/1573))
@@ -64,8 +79,12 @@
   - Keep the existing tree visible until replacement population completes ([#1559](https://github.com/fooyin/fooyin/issues/1559))
 * Library/Metadata
   - Prevent stale playcount updates overwriting newer ratings ([#1563](https://github.com/fooyin/fooyin/issues/1563))
+  - Prevent filesystem watcher setup blocking metadata writes ([#1584](https://github.com/fooyin/fooyin/issues/1584))
+  - Refresh the raw rating tag after rating writes ([#1607](https://github.com/fooyin/fooyin/issues/1607))
   - Flush file changes after tag writes ([#1557](https://github.com/fooyin/fooyin/pull/1557))
-* Lyrics: Fix automatic scrolling for unsynchronised lyrics ([#1556](https://github.com/fooyin/fooyin/issues/1556))
+* Lyrics
+  - Fix automatic scrolling for unsynchronised lyrics ([#1556](https://github.com/fooyin/fooyin/issues/1556))
+  - Throttle LRCLIB requests and honour `Retry-After`
 * Networking: Send a fooyin user agent with all network requests
 * Playlist
   - Fix reordering when temporary playlists are present
@@ -73,10 +92,15 @@
   - Preserve spaces in unquoted CUE `REM` values ([#1548](https://github.com/fooyin/fooyin/issues/1548))
   - Stop generating item moves after the reset threshold is reached
 * Quick Tagger: Avoid file rewrites for rating changes ([#1551](https://github.com/fooyin/fooyin/issues/1551))
-* Scripting: Treat native path separators equivalently in queries ([#1595](https://github.com/fooyin/fooyin/issues/1595))
+* Radio Browser: Prevent oversized icons overlapping columns ([#1604](https://github.com/fooyin/fooyin/issues/1604))
 * Search: Fix starting playback from results
 * Settings: Fix user folder actions across platforms
-* Scripting: Fix premature termination of query operator chains ([#1586](https://github.com/fooyin/fooyin/issues/1586))
+* Scripting
+  - Fix premature termination of query operator chains ([#1586](https://github.com/fooyin/fooyin/issues/1586))
+  - Fix whitespace handling in quoted queries
+  - Treat native path separators equivalently in queries ([#1595](https://github.com/fooyin/fooyin/issues/1595))
+  - Use one-based indexes for `$strstr`
+* Tag Editor: Fix editing regression
 * WaveBar: Avoid warnings when playing remote streams
 
 ### Build/System
